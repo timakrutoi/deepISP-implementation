@@ -3,23 +3,7 @@
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 
-# for dataset class
-import torchvision.models
-from torch.utils.data import Dataset
-from torchvision.io import read_image
-from torchvision import transforms
-from torch.utils.data import DataLoader
-
-# for checkpoints
-import time
-
-# for whatever
-import pandas as pd
-import os
-from tqdm import tqdm
 import numpy as np
 
 
