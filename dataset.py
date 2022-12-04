@@ -1,51 +1,66 @@
 from os import listdir, sep
 
 from torchvision import transforms
-from torchvision.io import read_image
-from torch.utils import Dataset
+# from torchvision.io import read_image
 from torch.utils.data import DataLoader
+from torch.utils.data import Dataset
+
+# loading raw image
+from skimage import io
+
+# demosaicing raw image
+from colour_demosaicing import demosaicing_CFA_Bayer_bilinear
 
 
 class S7Dataset(Dataset):
-    def __init__(self, directory, mode='m', transform=None, target_transform=None):
+    def __init__(self, directory, mode, target='m', factor=0.7):
         self.directory = directory
 
-        self.transform = transform
-        self.target_transform = target_transform
+        self.raw_transform = demosaicing_CFA_Bayer_bilinear
 
         self.dng = '.dng'
         self.jpg = '.jpg'
 
-        if mode == 'm':
-            self.mode = 'medium_exposure'
-        elif mode == 's':
-            self.mode = 'short_exposure'
+        self.l = len(listdir(self.directory))
+
+        if mode == 'train':
+            self.len = 0, int(self.l * factor)
+        if mode == 'test':
+            self.len = self.l - int(self.l * factor), self.l
+
+        if target == 'm':
+            self.target = 'medium_exposure'
+        elif target == 's':
+            self.target = 'short_exposure'
             self.jpg = '1.jpg'
 
 
     def __len__(self):
-        return len(os.listdir(self.directory))
+        return self.len[1] - self.len[0]
 
     def __getitem__(self, idx):
-        l = os.listdir(self.directory)
-        i_img = read_image(sep.join([self.directory, l[idx]], f'{self.mode}{self.dng}'))
-        o_img = read_image(sep.join([self.directory, l[idx]], f'{self.mode}{self.jpg}'))
+        l = listdir(self.directory)
 
-        if self.transform:
-            image = self.transform(image)
-        if self.target_transform:
-            label = self.target_transform(label)
+        # i_img = read_image(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.dng}']))
+        # o_img = read_image(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.jpg}']))
 
-        return i_img.float(), o_img.float()
+        i_img = io.imread(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.dng}']))
+        o_img = io.imread(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.jpg}']))
+
+        i_img = self.raw_transform(i_img)
+
+        return i_img.astype('float64'), o_img.astype('float64')
 
 
 def get_data(data_path='../dataset/S7-ISP-Dataset', batch_size=64):
     train_data = S7Dataset(
-        img_dir=data_path
+        directory=data_path,
+        mode='train'
     )
 
     test_data = S7Dataset(
-        img_dir=data_path
+        directory=data_path,
+        mode='test'
     )
 
     train_loader = DataLoader(
@@ -60,3 +75,11 @@ def get_data(data_path='../dataset/S7-ISP-Dataset', batch_size=64):
     )
 
     return train_loader, test_loader
+
+
+if __name__ == '__main__':
+    path = '../dataset/S7-ISP-Dataset'
+    train, test = get_data(path)
+
+    for i in train:
+        print(i)
