@@ -15,7 +15,7 @@ from colour_demosaicing import demosaicing_CFA_Bayer_bilinear
 
 
 class S7Dataset(Dataset):
-    def __init__(self, directory, mode, target='m', factor=0.7, crop_size=256):
+    def __init__(self, directory, mode, target, factor, crop_size):
         self.directory = directory
 
         self.raw_transform = demosaicing_CFA_Bayer_bilinear
@@ -67,7 +67,7 @@ class S7Dataset(Dataset):
         return i_img.float(), o_img.float()
 
 
-def get_data(data_path, batch_size, target, factor, crop_size):
+def get_data(data_path, batch_size, target='m', factor=0.7, crop_size=256):
     train_data = S7Dataset(
         directory=data_path,
         mode='train',
