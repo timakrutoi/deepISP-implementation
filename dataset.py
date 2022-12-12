@@ -1,4 +1,6 @@
 from os import listdir, sep
+import numpy as np
+import torch
 
 from torchvision import transforms
 # from torchvision.io import read_image
@@ -13,10 +15,11 @@ from colour_demosaicing import demosaicing_CFA_Bayer_bilinear
 
 
 class S7Dataset(Dataset):
-    def __init__(self, directory, mode, target='m', factor=0.7):
+    def __init__(self, directory, mode, target='m', factor=0.7, crop_size=256):
         self.directory = directory
 
         self.raw_transform = demosaicing_CFA_Bayer_bilinear
+        self.crop_size = crop_size
 
         self.dng = '.dng'
         self.jpg = '.jpg'
@@ -26,7 +29,7 @@ class S7Dataset(Dataset):
         if mode == 'train':
             self.len = 0, int(self.l * factor)
         if mode == 'test':
-            self.len = self.l - int(self.l * factor), self.l
+            self.len = int(self.l * factor), self.l
 
         if target == 'm':
             self.target = 'medium_exposure'
@@ -34,33 +37,51 @@ class S7Dataset(Dataset):
             self.target = 'short_exposure'
             self.jpg = '1.jpg'
 
-
     def __len__(self):
+
         return self.len[1] - self.len[0]
 
     def __getitem__(self, idx):
         l = listdir(self.directory)
 
-        # i_img = read_image(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.dng}']))
-        # o_img = read_image(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.jpg}']))
-
         i_img = io.imread(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.dng}']))
         o_img = io.imread(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.jpg}']))
 
-        i_img = self.raw_transform(i_img)
+        i_img = self.raw_transform(i_img) / 1024
+        
+        old_shape = i_img.shape
+        new_shape = old_shape[2], self.crop_size, self.crop_size
+        
+        x = np.random.randint(0, old_shape[0] - self.crop_size)
+        y = np.random.randint(0, old_shape[1] - self.crop_size)
+        
+        i_img = torch.tensor(i_img[x:x+self.crop_size, y:y+self.crop_size, :])
+        o_img = torch.tensor(o_img[x:x+self.crop_size, y:y+self.crop_size, :])
+                
+        i_img = i_img.reshape(new_shape)
+        o_img = o_img.reshape(new_shape)
+        
+        # maybe do data normalization
+        # img = norm(img)
 
-        return i_img.astype('float64'), o_img.astype('float64')
+        return i_img.float(), o_img.float()
 
 
-def get_data(data_path='../dataset/S7-ISP-Dataset', batch_size=64):
+def get_data(data_path, batch_size, target, factor, crop_size):
     train_data = S7Dataset(
         directory=data_path,
-        mode='train'
+        mode='train',
+        target=target,
+        factor=factor,
+        crop_size=crop_size
     )
 
     test_data = S7Dataset(
         directory=data_path,
-        mode='test'
+        mode='test',
+        target=target,
+        factor=factor,
+        crop_size=crop_size
     )
 
     train_loader = DataLoader(
