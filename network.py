@@ -10,21 +10,21 @@ import numpy as np
 class DeepispLL(nn.Module):
     def __init__(self, kernel=(3,3), stride=1, padding=1):
         super(DeepispLL, self).__init__()
-
-        # self.size = n * m
-        self.padding = padding
-        self.kernel = kernel
-        self.stride = stride
+        
+        self.conv1 = nn.Conv2d(61, 61, kernel_size=kernel, stride=stride, padding=padding)
+        self.relu = nn.ReLU()
+        self.conv2 = nn.Conv2d(3, 3, kernel_size=kernel, stride=stride, padding=padding)
+        self.tanh = nn.Tanh()
 
     def forward(self, x):
-        rh = nn.Conv2d(61, 61, kernel_size=self.kernel, stride=self.stride, padding=self.padding)(x[:,:61,:,:])
-        rh = nn.ReLU()(rh)
+        rh = self.conv1(x[:,:61,:,:])
+        rh = self.relu(rh)
 
-        lh = nn.Conv2d(3, 3, kernel_size=self.kernel, stride=self.stride, padding=self.padding)(x[:,61:,:,:])
-        lh = nn.Tanh()(lh)
+        lh = self.conv2(x[:,61:,:,:])
+        lh = self.tanh(lh)
 
-        # need to so some sum
-        # lh += x
+        # need to do skip connections
+        lh += x[:,61:,:,:]
 
         return torch.cat((rh, lh), 1)
 
@@ -32,15 +32,15 @@ class DeepispLL(nn.Module):
 class DeepispHL(nn.Module):
     def __init__(self, kernel=(3,3), stride=2, padding=1):
         super(DeepispHL, self).__init__()
-
-        self.padding = padding
-        self.kernel = kernel
-        self.stride = stride
+        
+        self.conv = nn.Conv2d(64, 64, kernel_size=kernel, stride=stride, padding=padding)
+        self.relu = nn.ReLU()
+        self.pool = nn.MaxPool2d(2, 2)
 
     def forward(self, x):
-        x = nn.Conv2d(64, 64, kernel_size=self.kernel, stride=self.stride, padding=self.padding)(x)
-        x = nn.ReLU()(x)
-        x = nn.MaxPool2d(2, 2)(x)
+        x = self.conv(x)
+        x = self.relu(x)
+        x = self.pool(x)
 
         return x
 
@@ -68,16 +68,17 @@ def triu(rgb):
     res[8] = b
     res[9] = 1
 
-    return res.reshape((10))
+    return res.reshape((1, 10))
 
 
 def Tform(I, W):
     b, c, h, w = I.shape
-    res = torch.tensor(np.empty(I.shape))
-    W = W.reshape((3, 10))
-    for x in range(h):
-        for y in range(w):
-            res[:, :, x, y] = W @ triu(I[:, :, x, y])
+    res = torch.tensor(np.zeros(I.shape))
+    W = W.reshape((b, 3, 10))
+    for i in range(b):
+        for x in range(h):
+            for y in range(w):
+                res[i, :, x, y] = torch.tensordot(W[i, :, :], triu(I[i, :, x, y]))
     return res
 
 
@@ -112,8 +113,8 @@ class DeepISP(nn.Module):
     def forward(self, x):
         I = self.lowlevel(x)
         W = self.highlevel(I[:,:61,:,:])
-        return self.T(I[:,61:,:,:], W)
-
+        x = self.T(I[:,61:,:,:], W)
+        return x
 
 if __name__ == '__main__':
     net = DeepISP(2, 2)
