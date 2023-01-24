@@ -23,7 +23,7 @@ class DeepispLL(nn.Module):
         lh = self.conv2(x[:,61:,:,:])
         lh = self.tanh(lh)
 
-        # need to do skip connections
+        # need to so some sum
         lh += x[:,61:,:,:]
 
         return torch.cat((rh, lh), 1)
@@ -56,7 +56,7 @@ class GlobalPool2d(nn.Module):
 
 def triu(rgb):
     res = torch.tensor(np.empty(10), dtype=torch.float)
-    r, g, b = rgb[0, 0], rgb[0, 1], rgb[0, 2]
+    r, g, b = rgb[0], rgb[1], rgb[2]
     res[0] = r*r
     res[1] = r*g
     res[2] = r*b
@@ -71,7 +71,7 @@ def triu(rgb):
     return res.reshape((1, 10))
 
 
-def Tform(I, W):
+def Tform2(I, W):
     b, c, h, w = I.shape
     res = torch.tensor(np.zeros(I.shape))
     W = W.reshape((b, 3, 10))
@@ -80,6 +80,24 @@ def Tform(I, W):
             for y in range(w):
                 res[i, :, x, y] = torch.tensordot(W[i, :, :], triu(I[i, :, x, y]))
     return res
+
+
+def Tform(I, W):
+    b, c, h, w = I.shape
+    W = W.reshape((b, 3, 10))
+
+    I = torch.cat((I, torch.ones((b, 1, h, w))), dim=1).reshape((b, 1, 4, h, w))
+    g = torch.permute(I, (0, 2, 1, 3, 4))
+    n = torch.einsum('bdcij,bgdij->bgcij', I, g)
+    #  0  1  2  3
+    #  4  5  6  7
+    #  8  9 10 11
+    # 12 13 14 15
+    # get vectorized trui
+    n = torch.flatten(n, 1, 2)[:, [0,1,2,3, 5,6,7, 10,11, 15], :, :].reshape((b, 1, 10, h, w))
+    n = torch.einsum('bwcij,bwc->bwij', n, W)
+
+    return n
 
 
 class DeepISP(nn.Module):
@@ -115,6 +133,7 @@ class DeepISP(nn.Module):
         W = self.highlevel(I[:,:61,:,:])
         x = self.T(I[:,61:,:,:], W)
         return x
+
 
 if __name__ == '__main__':
     net = DeepISP(2, 2)

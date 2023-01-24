@@ -44,8 +44,8 @@ class S7Dataset(Dataset):
     def __getitem__(self, idx):
         l = listdir(self.directory)
 
-        i_img = io.imread(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.dng}']))
-        o_img = io.imread(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.jpg}']))
+        i_img = io.imread(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.dng}'])) / 1024
+        o_img = io.imread(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.jpg}'])) / 1024
 
         i_img = self.raw_transform(i_img) / 1024
         
@@ -55,8 +55,14 @@ class S7Dataset(Dataset):
         x = np.random.randint(0, old_shape[0] - self.crop_size)
         y = np.random.randint(0, old_shape[1] - self.crop_size)
         
-        i_img = torch.tensor(i_img[x:x+self.crop_size, y:y+self.crop_size, :])
-        o_img = torch.tensor(o_img[x:x+self.crop_size, y:y+self.crop_size, :])
+        slice_x = slice(x, x + self.crop_size)
+        slice_y = slice(y, y + self.crop_size)
+        
+        i_img = torch.tensor(i_img[slice_x, slice_y, :].copy())
+        if (old_shape[0], old_shape[1]) != (o_img.shape[0], o_img.shape[1]):            
+#             print('Bad shape detected', old_shape, o_img.shape)
+            slice_x, slice_y = slice_y, slice_x
+        o_img = torch.tensor(o_img[slice_x, slice_y, :].copy())
                 
         i_img = i_img.reshape(new_shape)
         o_img = o_img.reshape(new_shape)
