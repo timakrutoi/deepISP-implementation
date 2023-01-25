@@ -11,15 +11,16 @@ from torch.utils.data import Dataset
 from skimage import io
 
 # demosaicing raw image
-from colour_demosaicing import demosaicing_CFA_Bayer_bilinear
+from demosaic import demosaicing_Bayer_bilinear
 
 
 class S7Dataset(Dataset):
-    def __init__(self, directory, mode, target, factor, crop_size):
+    def __init__(self, directory, mode, target, factor, crop_size, norm):
         self.directory = directory
 
-        self.raw_transform = demosaicing_CFA_Bayer_bilinear
+        self.raw_transform = demosaicing_Bayer_bilinear
         self.crop_size = crop_size
+        self.norm = norm
 
         self.dng = '.dng'
         self.jpg = '.jpg'
@@ -38,16 +39,20 @@ class S7Dataset(Dataset):
             self.jpg = '1.jpg'
 
     def __len__(self):
-
         return self.len[1] - self.len[0]
 
     def __getitem__(self, idx):
         l = listdir(self.directory)
 
-        i_img = io.imread(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.dng}'])) / 1024
-        o_img = io.imread(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.jpg}'])) / 1024
+        i_img = io.imread(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.dng}'])).astype('float32')
+        o_img = io.imread(sep.join([self.directory, l[idx + self.len[0]], f'{self.target}{self.jpg}'])).astype('float32')
 
-        i_img = self.raw_transform(i_img) / 1024
+        if self.norm:
+            i_img = self.raw_transform((i_img - 512) / 512)
+            o_img = (o_img - 128) / 128
+        else:
+            i_img = self.raw_transform(i_img)
+            # o_img = o_img
         
         old_shape = i_img.shape
         new_shape = old_shape[2], self.crop_size, self.crop_size
@@ -66,20 +71,18 @@ class S7Dataset(Dataset):
                 
         i_img = i_img.reshape(new_shape)
         o_img = o_img.reshape(new_shape)
-        
-        # maybe do data normalization
-        # img = norm(img)
 
         return i_img.float(), o_img.float()
 
 
-def get_data(data_path, batch_size, target='m', factor=0.7, crop_size=256):
+def get_data(data_path, batch_size, target='m', factor=0.7, crop_size=256, norm=False):
     train_data = S7Dataset(
         directory=data_path,
         mode='train',
         target=target,
         factor=factor,
-        crop_size=crop_size
+        crop_size=crop_size,
+        norm=norm
     )
 
     test_data = S7Dataset(
@@ -87,7 +90,8 @@ def get_data(data_path, batch_size, target='m', factor=0.7, crop_size=256):
         mode='test',
         target=target,
         factor=factor,
-        crop_size=crop_size
+        crop_size=crop_size,
+        norm=norm
     )
 
     train_loader = DataLoader(
