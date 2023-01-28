@@ -5,22 +5,28 @@ import torch.nn as nn
 def Tform(I, W):
     b, c, h, w = I.shape
     # somehow (b, 3, 10) doesnt work, but (b, 10, 3) does
+    # W = W.reshape(b, 3, 10)
     W = W.reshape((b, 10, 3)).permute((0, 2, 1))
 
     # adding 4th channel with all 1
     I = torch.cat((I, torch.ones((b, 1, h, w))), dim=1)
-    I = I.reshape((b, 1, 4, h, w))
-    g = I.transpose(1, 2)
+    # I = I.reshape((b, 1, 4, h, w))
+    # g = I.transpose(1, 2)
 
-    # matmul (b, 1, 4, h, w)*(b, 4, 1, h, w) = (b, 4, 4, h, w)
-    n = torch.einsum('bceij,befij->bcfij', g, I)
+    # matmul (b, 4, 1, h, w)*(b, 1, 4, h, w) = (b, 4, 4, h, w)
+    # n = torch.einsum('bceij,befij->bcfij', g, I)
+    n = torch.einsum('beij,bfij->befij', I, I)
 
-    # get vectorized trui
+    # get vectorized triu
     n = torch.flatten(n, 1, 2)[:, [0, 1, 2, 3, 5, 6, 7, 10, 11, 15], :, :]
-    n = n.reshape((b, 1, 10, h, w))
+    n = n.reshape((b, 10, 1, h, w))
 
-    # matmul (b, 3, 10)*(b, 1, 10, h, w) = (b, 3, h, w)
-    n = torch.einsum('bwc,bfcij->bwij', W, n)
+    # matmul (b, 3, 10)*(b, 10, 1, h, w) = (b, 3, h, w)
+    n = torch.einsum('bwc,bcfij->bwij', W, n)
+
+    # wtf?
+    n[n > 1] = 1
+    n[n < -1] = -1
 
     return n
 
@@ -53,7 +59,7 @@ class DeepispHL(nn.Module):
         self.conv = nn.Conv2d(64, 64, kernel_size=kernel,
                               stride=stride, padding=padding)
         self.relu = nn.ReLU()
-        self.pool = nn.MaxPool2d(2, 2)
+        self.pool = nn.MaxPool2d((2, 2))
 
     def forward(self, x):
         x = self.conv(x)
