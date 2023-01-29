@@ -11,6 +11,8 @@ from skimage import io
 # demosaicing raw image
 from demosaic import demosaicing_Bayer_bilinear
 
+from kornia.color import rgb_to_ycbcr
+
 
 class S7Dataset(Dataset):
     def __init__(self, directory, mode, target,
@@ -26,9 +28,11 @@ class S7Dataset(Dataset):
         tmp_len = len(listdir(self.directory))
 
         if mode == 'train':
-            self.len = 0, int(tmp_len * factor)
+            self.start = 0
+            self.len = int(tmp_len * factor)
         if mode == 'test':
-            self.len = int(tmp_len * factor), tmp_len
+            self.start = int(tmp_len * factor)
+            self.len = tmp_len - self.start
 
         if target == 'm':
             self.target = 'medium_exposure'
@@ -37,24 +41,24 @@ class S7Dataset(Dataset):
             self.dng = '1.dng'
 
     def __len__(self):
-        return self.len[1] - self.len[0]
+        return self.len
 
     def __getitem__(self, idx):
         dirs = listdir(self.directory)
 
         i1p = sep.join([self.directory,
-                        dirs[idx + self.len[0]],
+                        dirs[idx + self.start],
                         f'{self.target}{self.dng}'])
         i2p = sep.join([self.directory,
-                        dirs[idx + self.len[0]],
+                        dirs[idx + self.start],
                         f'{self.target}{self.jpg}'])
 
         # values from 0 to 1023
         i_img = torch.tensor(io.imread(i1p).astype('float'))
+        i_img = (i_img - 512) / 512
+
         # values from 0 to 255
         o_img = torch.tensor(io.imread(i2p).astype('float'))
-
-        i_img = (i_img - 512) / 512
         o_img = (o_img - 128) / 128
 
         i_img = self.raw_transform(i_img)
