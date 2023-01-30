@@ -16,7 +16,7 @@ def Tform(I, W):
     n = torch.einsum('beij,bfij->bfeij', I, I)
 
     # get vectorized triu
-    n = torch.flatten(n, 1, 2)[:, [0, 1, 2, 3, 5, 6, 7, 10, 11, 15], :, :]
+    n = torch.flatten(n, 1, 2)[:, [0, 1, 2, 3, 5, 6, 7, 10, 11, 15]]
 
     # matmul (b, 3, 10)*(b, 10, h, w) = (b, 3, h, w)
     n = torch.einsum('bwc,bcij->bwij', W, n)
@@ -31,10 +31,12 @@ def Tform(I, W):
 
 
 class DeepispLL(nn.Module):
-    def __init__(self, kernel=(3, 3), stride=1, padding=1):
+    def __init__(self, in_channels=61, kernel=(3, 3), stride=1, padding=1):
         super(DeepispLL, self).__init__()
+        
+        self.in_channels = in_channels
 
-        self.conv1 = nn.Conv2d(61, 61, kernel_size=kernel,
+        self.conv1 = nn.Conv2d(self.in_channels, 61, kernel_size=kernel,
                                stride=stride, padding=padding)
         self.relu = nn.ReLU()
         self.conv2 = nn.Conv2d(3, 3, kernel_size=kernel,
@@ -42,20 +44,20 @@ class DeepispLL(nn.Module):
         self.tanh = nn.Tanh()
 
     def forward(self, x):
-        rh = self.relu(self.conv1(x[:, :61, :, :]))
-        lh = self.tanh(self.conv2(x[:, 61:, :, :]))
+        rh = self.relu(self.conv1(x[:, :self.in_channels]))
+        lh = self.tanh(self.conv2(x[:, -3:]))
 
         # skip connections
-        lh = lh + x[:, 61:, :, :].clone()
+        lh = lh + x[:, -3:].clone()
 
         return torch.cat((rh, lh), 1)
 
 
 class DeepispHL(nn.Module):
-    def __init__(self, kernel=(3, 3), stride=2, padding=0):
+    def __init__(self, in_channels=64, kernel=(3, 3), stride=2, padding=0):
         super(DeepispHL, self).__init__()
 
-        self.conv = nn.Conv2d(64, 64, kernel_size=kernel,
+        self.conv = nn.Conv2d(in_channels, 64, kernel_size=kernel,
                               stride=stride, padding=padding)
         self.relu = nn.ReLU()
         self.pool = nn.MaxPool2d((2, 2))
@@ -78,44 +80,37 @@ class GlobalPool2d(nn.Module):
 
 
 class DeepISP(nn.Module):
-    def __init__(self, n_ll, n_hl, kernel=(3, 3), stride=1, padding=1):
+    def __init__(self, n_ll, n_hl):
         super(DeepISP, self).__init__()
-        self.kernel = kernel
-        self.stride = stride
-        self.padding = padding
+
+        assert n_ll >= 1, f'Nll must be greater than 0 (current is {n_ll})'
+        assert n_hl >= 1, f'Nhl must be greater than 0 (current is {n_hl})'
 
         self.lowlevel = nn.Sequential()
+        self.lowlevel.append(DeepispLL(in_channels=3))
+        for i in range(n_ll - 1):
+            self.lowlevel.append(DeepispLL())
+
         self.highlevel = nn.Sequential()
-
-        self.lowlevel.append(nn.Conv2d(3, 64, kernel_size=self.kernel,
-                                       stride=self.stride,
-                                       padding=self.padding))
-        self.highlevel.append(nn.Conv2d(61, 64, kernel_size=self.kernel,
-                                        stride=self.stride,
-                                        padding=self.padding))
-
-        for i in range(n_ll):
-            self.lowlevel.append(DeepispLL(kernel=self.kernel,
-                                           stride=self.stride,
-                                           padding=self.padding))
-
-        for i in range(n_hl):
-            self.highlevel.append(DeepispHL(kernel=self.kernel,
-                                            stride=2, padding=0))
+        self.highlevel.append(DeepispHL(in_channels=61))
+        for i in range(n_hl - 1):
+            self.highlevel.append(DeepispHL())
 
         # append global pooling on high level to get 1x1x64 shape
         # current shape is (N/4^n_hl, M/4^n_hl, 64)
         self.highlevel.append(GlobalPool2d())
 
         self.highlevel.append(nn.Linear(64, 30))
+        with torch.no_grad():
+            self.highlevel[-1].bias.copy_(torch.eye(10, 3).view(-1))
 
         # do some T(W, L)
         self.T = Tform
 
     def forward(self, x):
         I = self.lowlevel(x)
-        W = self.highlevel(I[:, :61, :, :])
-        x = self.T(I[:, 61:, :, :], W)
+        W = self.highlevel(I[:, :61])
+        x = self.T(I[:, 61:], W)
         return x
 
 
