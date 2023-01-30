@@ -31,24 +31,28 @@ def Tform(I, W):
 
 
 class DeepispLL(nn.Module):
-    def __init__(self, in_channels=61, kernel=(3, 3), stride=1, padding=1):
+    def __init__(self, in_channels=64, kernel=(3, 3), stride=1, padding=1):
         super(DeepispLL, self).__init__()
         
         self.in_channels = in_channels
+        self.img_channels = 3
 
-        self.conv1 = nn.Conv2d(self.in_channels, 61, kernel_size=kernel,
+        self.conv1 = nn.Conv2d(self.in_channels,
+                               64 - self.img_channels,
+                               kernel_size=kernel,
                                stride=stride, padding=padding)
         self.relu = nn.ReLU()
-        self.conv2 = nn.Conv2d(3, 3, kernel_size=kernel,
+        self.conv2 = nn.Conv2d(self.in_channels, self.img_channels,
+                               kernel_size=kernel,
                                stride=stride, padding=padding)
         self.tanh = nn.Tanh()
 
     def forward(self, x):
-        rh = self.relu(self.conv1(x[:, :self.in_channels]))
-        lh = self.tanh(self.conv2(x[:, -3:]))
+        rh = self.relu(self.conv1(x))
+        lh = self.tanh(self.conv2(x))
 
         # skip connections
-        lh = lh + x[:, -3:].clone()
+        lh = lh + x[:, -self.img_channels:].clone()
 
         return torch.cat((rh, lh), 1)
 
@@ -101,8 +105,8 @@ class DeepISP(nn.Module):
         self.highlevel.append(GlobalPool2d())
 
         self.highlevel.append(nn.Linear(64, 30))
-        with torch.no_grad():
-            self.highlevel[-1].bias.copy_(torch.eye(10, 3).view(-1))
+        # with torch.no_grad():
+        #     self.highlevel[-1].bias.copy_(torch.eye(10, 3).view(-1))
 
         # do some T(W, L)
         self.T = Tform
