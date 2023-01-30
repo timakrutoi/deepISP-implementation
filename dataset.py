@@ -63,18 +63,20 @@ class S7Dataset(Dataset):
 
         i_img = self.raw_transform(i_img)
 
-        old_shape = i_img.shape
+        x = np.random.randint(0, i_img.shape[0] - self.crop_size)
+        y = np.random.randint(0, i_img.shape[1] - self.crop_size)
+        # print(x, y)
 
-        x = np.random.randint(0, old_shape[0] - self.crop_size)
-        y = np.random.randint(0, old_shape[1] - self.crop_size)
+        # for blue color
+        # x, y = 1926, 727
 
         slice_x = slice(x, x + self.crop_size)
         slice_y = slice(y, y + self.crop_size)
 
         # this *if* checks if jpg version of image is rotated
-        # on +-90 degrees (raw data in never rotated)
+        # on 90 degrees (raw data in never rotated)
         if (i_img.shape[:2]) != (o_img.shape[:2]):
-            # print('Bad shape detected', old_shape, o_img.shape)
+            # print('Bad shape detected (', idx, ')', i_img.shape, o_img.shape)
             o_img = o_img.rot90(k=1, dims=[0, 1])
 
         i_img = i_img[slice_x, slice_y, :]
