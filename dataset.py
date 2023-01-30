@@ -90,7 +90,8 @@ class S7Dataset(Dataset):
 
 def get_data(data_path, batch_size,
              target='m', factor=0.7,
-             crop_size=256, norm=False):
+             crop_size=256, norm=False,
+             num_workers=0):
 
     train_data = S7Dataset(
         directory=data_path,
@@ -111,12 +112,14 @@ def get_data(data_path, batch_size,
     train_loader = DataLoader(
         train_data,
         batch_size=batch_size,
-        shuffle=False
+        shuffle=False,
+        num_workers=num_workers
     )
     test_loader = DataLoader(
         test_data,
         batch_size=batch_size,
-        shuffle=False
+        shuffle=False,
+        num_workers=num_workers
     )
 
     return train_loader, test_loader
