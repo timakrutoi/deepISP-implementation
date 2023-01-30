@@ -113,8 +113,8 @@ class DeepISP(nn.Module):
 
     def forward(self, x):
         I = self.lowlevel(x)
-        W = self.highlevel(I[:, :61])
-        x = self.T(I[:, 61:], W)
+        W = self.highlevel(I[:, :-3])
+        x = self.T(I[:, -3:], W)
         return x
 
 
