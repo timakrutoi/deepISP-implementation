@@ -10,7 +10,7 @@ from skimage import io
 # demosaicing raw image
 from demosaic import demosaicing_Bayer_bilinear
 
-from kornia.color import rgb_to_ycbcr
+from utils import Norm
 
 
 def random_crop(initial, target, crop_size):
@@ -54,7 +54,7 @@ def random_flip(initial, target, flip_mode):
 
 class S7Dataset(Dataset):
     def __init__(self, directory, mode, target,
-                 factor, crop_size, flip):
+                 factor, crop_size, norm_mode, flip):
         self.directory = directory
 
         self.raw_transform = demosaicing_Bayer_bilinear
@@ -69,7 +69,7 @@ class S7Dataset(Dataset):
         if mode == 'train':
             self.start = 0
             self.len = int(tmp_len * factor)
-        if mode == 'test':
+        elif mode == 'test':
             self.start = int(tmp_len * factor)
             self.len = tmp_len - self.start
 
@@ -78,6 +78,8 @@ class S7Dataset(Dataset):
         elif target == 's':
             self.target = 'short_exposure'
             self.dng = '1.dng'
+
+        self.norm = Norm(mode=norm_mode)
 
     def __len__(self):
         return self.len
@@ -94,11 +96,11 @@ class S7Dataset(Dataset):
 
         # values from 0 to 1023
         i_img = torch.tensor(io.imread(i1p).astype('float'))
-        i_img = (i_img - 512) / 512
+        i_img = self.norm(i_img, bounds_before=(0, 1023))
 
         # values from 0 to 255
         o_img = torch.tensor(io.imread(i2p).astype('float'))
-        o_img = (o_img - 128) / 128
+        o_img = self.norm(o_img, bounds_before=(0, 255))
 
         patterns = ["RGGB", "BGGR", "GRBG", "GBRG"]
         i_img = self.raw_transform(i_img, pattern=patterns[0])
@@ -119,17 +121,19 @@ class S7Dataset(Dataset):
 
 def get_data(data_path, batch_size,
              target='m', factor=0.7,
-             crop_size=256,
-             norm=False, flip='hv',
+             crop_size=256, flip='hv',
+             norm_mode='simple',
              num_workers=0):
 
+    # [TODO] get rid of those long args
     train_data = S7Dataset(
         directory=data_path,
         mode='train',
         target=target,
         factor=factor,
         crop_size=crop_size,
-        flip=flip
+        flip=flip,
+        norm_mode=norm_mode
     )
 
     test_data = S7Dataset(
@@ -138,7 +142,8 @@ def get_data(data_path, batch_size,
         target=target,
         factor=factor,
         crop_size=crop_size,
-        flip=flip
+        flip=flip,
+        norm_mode=norm_mode
     )
 
     train_loader = DataLoader(
