@@ -33,7 +33,7 @@ def Tform(I, W):
 class DeepispLL(nn.Module):
     def __init__(self, in_channels=64, kernel=(3, 3), stride=1, padding=1):
         super(DeepispLL, self).__init__()
-        
+
         self.in_channels = in_channels
         self.img_channels = 3
 
@@ -67,9 +67,7 @@ class DeepispHL(nn.Module):
         self.pool = nn.MaxPool2d((2, 2))
 
     def forward(self, x):
-        x = self.conv(x)
-        x = self.relu(x)
-        x = self.pool(x)
+        x = self.pool(self.relu(self.conv(x)))
 
         return x
 
@@ -80,7 +78,7 @@ class GlobalPool2d(nn.Module):
 
     def forward(self, x):
         b, c, w, h = tuple(x.shape)
-        return nn.AvgPool2d(kernel_size=(h, w))(x).reshape((b, c))
+        return nn.functional.avg_pool2d(x, kernel_size=(h, w)).reshape((b, c))
 
 
 class DeepISP(nn.Module):
@@ -108,7 +106,6 @@ class DeepISP(nn.Module):
         # with torch.no_grad():
         #     self.highlevel[-1].bias.copy_(torch.eye(10, 3).view(-1))
 
-        # do some T(W, L)
         self.T = Tform
 
     def forward(self, x):
