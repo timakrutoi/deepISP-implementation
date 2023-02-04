@@ -1,5 +1,4 @@
 from os import listdir, sep
-import numpy as np
 import torch
 
 from torch.utils.data import DataLoader
@@ -14,13 +13,53 @@ from demosaic import demosaicing_Bayer_bilinear
 from kornia.color import rgb_to_ycbcr
 
 
+def random_crop(initial, target, crop_size):
+    x = torch.randint(low=0, high=initial.shape[0] - crop_size, size=(1,))
+    y = torch.randint(low=0, high=initial.shape[1] - crop_size, size=(1,))
+    # print(x, y)
+
+    # for blue color
+    # x, y = 1926, 727
+    # x, y = 1138, 1172
+
+    slice_x = slice(x, x + crop_size)
+    slice_y = slice(y, y + crop_size)
+
+    # this *if* checks if jpg version of image is rotated
+    # on 90 degrees (raw data in never rotated)
+    if (initial.shape[:2]) != (target.shape[:2]):
+        # print('Bad shape detected (', idx, ')', i_img.shape, o_img.shape)
+        target = target.rot90(k=1, dims=[0, 1])
+
+    initial = initial[slice_x, slice_y, :]
+    target = target[slice_x, slice_y, :]
+
+    return initial, target
+
+
+def random_flip(initial, target, flip_mode):
+    f = []
+
+    if 'h' in flip_mode and torch.randint(low=0, high=1, size=(1,)):
+        f.append(1)
+
+    if 'v' in flip_mode and torch.randint(low=0, high=1, size=(1,)):
+        f.append(0)
+
+    initial = initial.flip(dims=f)
+    target = target.flip(dims=f)
+
+    return initial, target
+
+
 class S7Dataset(Dataset):
     def __init__(self, directory, mode, target,
-                 factor, crop_size):
+                 factor, crop_size, flip):
         self.directory = directory
 
         self.raw_transform = demosaicing_Bayer_bilinear
         self.crop_size = crop_size
+        self.flip = flip
 
         self.dng = '.dng'
         self.jpg = '.jpg'
@@ -61,36 +100,27 @@ class S7Dataset(Dataset):
         o_img = torch.tensor(io.imread(i2p).astype('float'))
         o_img = (o_img - 128) / 128
 
-        i_img = self.raw_transform(i_img)
+        patterns = ["RGGB", "BGGR", "GRBG", "GBRG"]
+        i_img = self.raw_transform(i_img, pattern=patterns[0])
 
-        x = np.random.randint(0, i_img.shape[0] - self.crop_size)
-        y = np.random.randint(0, i_img.shape[1] - self.crop_size)
-        # print(x, y)
+        if self.crop_size is not None:
+            i_img, o_img = random_crop(i_img, o_img, self.crop_size)
 
-        # for blue color
-        # x, y = 1926, 727
-
-        slice_x = slice(x, x + self.crop_size)
-        slice_y = slice(y, y + self.crop_size)
-
-        # this *if* checks if jpg version of image is rotated
-        # on 90 degrees (raw data in never rotated)
-        if (i_img.shape[:2]) != (o_img.shape[:2]):
-            # print('Bad shape detected (', idx, ')', i_img.shape, o_img.shape)
-            o_img = o_img.rot90(k=1, dims=[0, 1])
-
-        i_img = i_img[slice_x, slice_y, :]
-        o_img = o_img[slice_x, slice_y, :]
+        if self.flip is not None:
+            i_img, o_img = random_flip(i_img, o_img, self.flip)
 
         i_img = i_img.permute(2, 0, 1)
         o_img = o_img.permute(2, 0, 1)
+        # i_img = i_img[[2,1,0]]
+        # o_img = o_img[[2,1,0]]
 
         return i_img, o_img
 
 
 def get_data(data_path, batch_size,
              target='m', factor=0.7,
-             crop_size=256, norm=False,
+             crop_size=256,
+             norm=False, flip='hv',
              num_workers=0):
 
     train_data = S7Dataset(
@@ -98,7 +128,8 @@ def get_data(data_path, batch_size,
         mode='train',
         target=target,
         factor=factor,
-        crop_size=crop_size
+        crop_size=crop_size,
+        flip=flip
     )
 
     test_data = S7Dataset(
@@ -106,7 +137,8 @@ def get_data(data_path, batch_size,
         mode='test',
         target=target,
         factor=factor,
-        crop_size=crop_size
+        crop_size=crop_size,
+        flip=flip
     )
 
     train_loader = DataLoader(
