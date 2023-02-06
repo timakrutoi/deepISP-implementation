@@ -25,12 +25,6 @@ def random_crop(initial, target, crop_size):
     slice_x = slice(x, x + crop_size)
     slice_y = slice(y, y + crop_size)
 
-    # this *if* checks if jpg version of image is rotated
-    # on 90 degrees (raw data in never rotated)
-    if (initial.shape[:2]) != (target.shape[:2]):
-        # print('Bad shape detected (', idx, ')', i_img.shape, o_img.shape)
-        target = target.rot90(k=1, dims=[0, 1])
-
     initial = initial[slice_x, slice_y, :]
     target = target[slice_x, slice_y, :]
 
@@ -104,6 +98,12 @@ class S7Dataset(Dataset):
 
         patterns = ["RGGB", "BGGR", "GRBG", "GBRG"]
         i_img = self.raw_transform(i_img, pattern=patterns[0])
+
+        # this *if* checks if jpg version of image is rotated
+        # on 90 degrees (raw data in never rotated)
+        if (i_img.shape[:2]) != (o_img.shape[:2]):
+            # print('Bad shape detected (', idx, ')', i_img.shape, o_img.shape)
+            o_img = o_img.rot90(k=1, dims=[0, 1])
 
         if self.crop_size is not None:
             i_img, o_img = random_crop(i_img, o_img, self.crop_size)
