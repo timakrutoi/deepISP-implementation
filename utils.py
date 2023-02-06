@@ -37,17 +37,37 @@ class Norm():
         return (self.b - self.a) * ((x - mn) / (mx - mn)) + self.a
 
 
+def plot_corr(x):
+    r, g, b = x[0], x[1], x[2]
+
+    # print('x', x.shape, x.min(), x.max())
+
+    rd = get_dist((r * 255).int().reshape(-1))
+    gd = get_dist((g * 255).int().reshape(-1))
+    bd = get_dist((b * 255).int().reshape(-1))
+
+    fig, axs = plt.subplots(3, 1)
+
+    axs[0].bar(np.arange(256), rd, color='red')
+    axs[1].bar(np.arange(256), gd, color='green')
+    axs[2].bar(np.arange(256), bd, color='blue')
+    plt.show()
+
+
+def get_dist(x):
+    r = [0 for _ in range(256)]
+
+    for i in x:
+        r[i] += 1
+
+    return np.array(r) / x.size()
+
+
 if __name__ == '__main__':
     n = Norm(bounds_after=(0, 1))
     
-    img = (np.random.randn(1, 1, 3, 3))
-    img[img > 1] = 1
-    img[img < -1] = -1
-    # img[0, 0, 0, 0] = 1023
-    # img[0, 0, 1, 1] = 512
-    # img[-1, -1, -1, -1] = 0
-    print(img)
+    x = np.array([0.])
+    print(n(x, bounds_before=(-1, 1)))
 
-    img = n(img, bounds_before=(-1, 1))
-
-    print(img)
+#     img = n(img, bounds_before=(-1, 1))
+#     print(img)
