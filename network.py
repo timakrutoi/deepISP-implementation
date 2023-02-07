@@ -7,8 +7,8 @@ def Tform(I, W):
     # reshape W from (b, 30) to (b, 3, 10)
     # somehow (b, 3, 10) doesnt work, but (b, 10, 3) does
     # W = W.reshape(b, 3, 10)
-    # W = W.reshape((b, 10, 3)).transpose(1, 2)
-    W = torch.tensor([[
+    W = W.reshape((b, 10, 3)).transpose(1, 2)
+    W += torch.tensor([[
         # rr rg rb  r gg gb  g bb  b  1
         # [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # r
         # [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # g
@@ -103,7 +103,7 @@ class GlobalPool2d(nn.Module):
 
     def forward(self, x):
         b, c, w, h = x.shape
-        return nn.functional.avg_pool2d(x, kernel_size=(h, w)).reshape((b, c))
+        return nn.functional.adaptive_avg_pool2d(x, 1).reshape((b, c))
 
 
 class DeepISP(nn.Module):
@@ -125,13 +125,14 @@ class DeepISP(nn.Module):
 
         # append global pooling on high level to get 1x1x64 shape
         # current shape is (N/4^n_hl, M/4^n_hl, 64)
+        # self.highlevel.append(GlobalPool2d())
         self.highlevel.append(GlobalPool2d())
 
         self.highlevel.append(nn.Linear(64, 30))
-        with torch.no_grad():
-            # print(self.highlevel[-1].weight.shape)
-            # self.highlevel[-1].weight.copy_(torch.zeros((30, 64)))
-            self.highlevel[-1].bias.copy_(torch.zeros(3, 10).view(-1))
+        # with torch.no_grad():
+        #     print(self.highlevel[-1].weight.shape)
+        #     self.highlevel[-1].weight.copy_(torch.zeros((30, 64)))
+        #     self.highlevel[-1].bias.copy_(torch.zeros(3, 10).view(-1))
 
         self.T = Tform
 
