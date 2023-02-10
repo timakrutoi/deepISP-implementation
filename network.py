@@ -25,7 +25,7 @@ def Tform(I, W, device='cpu'):
         [-0.0463, -0.0476, -0.0464,  0.0504, -0.0350, -0.0475,  0.0181, -0.0463, 0.0503,  0.0396],
         [-0.0710, -0.0736, -0.0711,  0.0828, -0.0632, -0.0736,  0.0531, -0.0710, 0.0827, -0.0060],
         [-0.0890, -0.0949, -0.0890,  0.1096, -0.0899, -0.0949,  0.0872, -0.0890, 0.1095, -0.0520]
-    ]], dtype=torch.float)
+    ]], dtype=torch.float).to(device)
 
     # adding 4th channel with all 1
     o = torch.ones((b, 1, h, w), dtype=torch.float)
@@ -136,7 +136,7 @@ class DeepISP(nn.Module):
     def forward(self, x):
         I = self.lowlevel(x)
         W = self.highlevel(I[:, :-3])
-        x = self.T(I[:, -3:], W)
+        x = self.T(I[:, -3:], W, next(self.parameters()).device)
         return x
 
 
