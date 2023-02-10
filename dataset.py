@@ -25,6 +25,12 @@ def random_crop(initial, target, crop_size):
     slice_x = slice(x, x + crop_size)
     slice_y = slice(y, y + crop_size)
 
+    # this *if* checks if jpg version of image is rotated
+    # on 90 degrees (raw data in never rotated)
+    if (initial.shape[:2]) != (target.shape[:2]):
+        # print('Bad shape detected (', idx, ')', i_img.shape, o_img.shape)
+        target = target.rot90(k=1, dims=[0, 1])
+
     initial = initial[slice_x, slice_y, :]
     target = target[slice_x, slice_y, :]
 
@@ -47,13 +53,17 @@ def random_flip(initial, target, flip_mode):
 
 
 class S7Dataset(Dataset):
-    def __init__(self, directory, mode, target,
-                 factor, crop_size, norm_mode, flip):
+    def __init__(self, directory, device, mode, target,
+                 factor, crop_size, norm_mode, flip, multiplier=1):
+        assert multiplier >= 1, 'Multiplier must be greater than or equal 1' \
+                                f' (is {multiplier} now)'
         self.directory = directory
+        self.device = device
 
         self.raw_transform = demosaicing_Bayer_bilinear
         self.crop_size = crop_size
         self.flip = flip
+        self.multi = multiplier
 
         self.dng = '.dng'
         self.jpg = '.jpg'
@@ -76,9 +86,10 @@ class S7Dataset(Dataset):
         self.norm = Norm(mode=norm_mode)
 
     def __len__(self):
-        return self.len
+        return self.len * self.multi
 
     def __getitem__(self, idx):
+        idx = idx // self.multi
         dirs = listdir(self.directory)
 
         i1p = sep.join([self.directory,
@@ -99,12 +110,6 @@ class S7Dataset(Dataset):
         patterns = ["RGGB", "BGGR", "GRBG", "GBRG"]
         i_img = self.raw_transform(i_img, pattern=patterns[0])
 
-        # this *if* checks if jpg version of image is rotated
-        # on 90 degrees (raw data in never rotated)
-        if (i_img.shape[:2]) != (o_img.shape[:2]):
-            # print('Bad shape detected (', idx, ')', i_img.shape, o_img.shape)
-            o_img = o_img.rot90(k=1, dims=[0, 1])
-
         if self.crop_size is not None:
             i_img, o_img = random_crop(i_img, o_img, self.crop_size)
 
@@ -116,10 +121,11 @@ class S7Dataset(Dataset):
         # i_img = i_img[[2,1,0]]
         # o_img = o_img[[2,1,0]]
 
-        return i_img, o_img
+        return i_img.to(self.device), o_img.to(self.device)
 
 
-def get_data(data_path, batch_size,
+def get_data(data_path, device,
+             batch_size=1,
              target='m', factor=0.7,
              crop_size=256, flip='hv',
              norm_mode='simple',
@@ -133,7 +139,8 @@ def get_data(data_path, batch_size,
         factor=factor,
         crop_size=crop_size,
         flip=flip,
-        norm_mode=norm_mode
+        norm_mode=norm_mode,
+        device=device
     )
 
     test_data = S7Dataset(
@@ -143,7 +150,8 @@ def get_data(data_path, batch_size,
         factor=factor,
         crop_size=crop_size,
         flip=flip,
-        norm_mode=norm_mode
+        norm_mode=norm_mode,
+        device=device
     )
 
     train_loader = DataLoader(
@@ -163,8 +171,9 @@ def get_data(data_path, batch_size,
 
 
 if __name__ == '__main__':
-    path = '../dataset/S7-ISP-Dataset'
+    path = '/toleinik/data/S7-ISP-Dataset'
     train, test = get_data(path)
 
     for i in train:
         print(i)
+        break

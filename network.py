@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-def Tform(I, W):
+def Tform(I, W, device='cpu'):
     b, c, h, w = I.shape
     # reshape W from (b, 30) to (b, 3, 10)
     # somehow (b, 3, 10) doesnt work, but (b, 10, 3) does
@@ -28,7 +28,8 @@ def Tform(I, W):
     ]], dtype=torch.float)
 
     # adding 4th channel with all 1
-    I = torch.cat((I, torch.ones((b, 1, h, w), dtype=torch.float)), dim=1)
+    o = torch.ones((b, 1, h, w), dtype=torch.float)
+    I = torch.cat((I, o.to(device)), dim=1)
 
     # matmul (b, 4, h, w)*(b, 4, h, w) = (b, 4, 4, h, w)
     n = torch.einsum('beij,bfij->bfeij', I, I)
@@ -129,10 +130,6 @@ class DeepISP(nn.Module):
         self.highlevel.append(GlobalPool2d())
 
         self.highlevel.append(nn.Linear(64, 30))
-        # with torch.no_grad():
-        #     print(self.highlevel[-1].weight.shape)
-        #     self.highlevel[-1].weight.copy_(torch.zeros((30, 64)))
-        #     self.highlevel[-1].bias.copy_(torch.zeros(3, 10).view(-1))
 
         self.T = Tform
 
