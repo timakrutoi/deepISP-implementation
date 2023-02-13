@@ -16,11 +16,6 @@ from utils import Norm
 def random_crop(initial, target, crop_size):
     x = torch.randint(low=0, high=initial.shape[0] - crop_size, size=(1,))
     y = torch.randint(low=0, high=initial.shape[1] - crop_size, size=(1,))
-    # print(x, y)
-
-    # for blue color
-    # x, y = 1926, 727
-    # x, y = 1138, 1172
 
     slice_x = slice(x, x + crop_size)
     slice_y = slice(y, y + crop_size)
@@ -53,12 +48,77 @@ def random_flip(initial, target, flip_mode):
 
 
 class S7Dataset(Dataset):
-    def __init__(self, directory, device, mode, target,
-                 factor, crop_size, norm_mode, flip, multiplier=1):
+    def __init__(self, directory, mode, target,
+                 factor, crop_size, norm_mode, flip):
         assert multiplier >= 1, 'Multiplier must be greater than or equal 1' \
                                 f' (is {multiplier} now)'
         self.directory = directory
-        self.device = device
+
+        self.raw_transform = demosaicing_Bayer_bilinear
+        self.crop_size = crop_size
+        self.flip = flip
+        self.multi = multiplier
+
+        self.dng = '.bmp'
+        self.jpg = '.jpg'
+
+        tmp_len = len(listdir(self.directory))
+
+        if mode == 'train':
+            self.start = 0
+            self.len = int(tmp_len * factor)
+        elif mode == 'test':
+            self.start = int(tmp_len * factor)
+            self.len = tmp_len - self.start
+
+        if target == 'm':
+            self.target = 'medium_exposure'
+        elif target == 's':
+            self.target = 'short_exposure'
+            self.dng = '1' + self.dng
+
+        self.norm = Norm(mode=norm_mode)
+
+    def __len__(self):
+        return self.len
+
+    def __getitem__(self, idx):
+        idx = idx
+        dirs = listdir(self.directory)
+
+        i1p = sep.join([self.directory,
+                        dirs[idx + self.start],
+                        f'{self.target}{self.dng}'])
+        i2p = sep.join([self.directory,
+                        dirs[idx + self.start],
+                        f'{self.target}{self.jpg}'])
+
+        # values from 0 to 255
+        i_img = torch.tensor(io.imread(i1p).astype('float'))
+        i_img = self.norm(i_img, bounds_before=(0, 255))
+
+        # values from 0 to 255
+        o_img = torch.tensor(io.imread(i2p).astype('float'))
+        o_img = self.norm(o_img, bounds_before=(0, 255))
+
+        if self.crop_size is not None:
+            i_img, o_img = random_crop(i_img, o_img, self.crop_size)
+
+        if self.flip is not None:
+            i_img, o_img = random_flip(i_img, o_img, self.flip)
+
+        i_img = i_img.permute(2, 0, 1)
+        o_img = o_img.permute(2, 0, 1)
+
+        return i_img, o_img
+    
+
+class S7Dataset_old(Dataset):
+    def __init__(self, directory, mode, target,
+                 factor, crop_size, norm_mode, flip, multiplier):
+        assert multiplier >= 1, 'Multiplier must be greater than or equal 1' \
+                                f' (is {multiplier} now)'
+        self.directory = directory
 
         self.raw_transform = demosaicing_Bayer_bilinear
         self.crop_size = crop_size
@@ -118,13 +178,11 @@ class S7Dataset(Dataset):
 
         i_img = i_img.permute(2, 0, 1)
         o_img = o_img.permute(2, 0, 1)
-        # i_img = i_img[[2,1,0]]
-        # o_img = o_img[[2,1,0]]
 
-        return i_img.to(self.device), o_img.to(self.device)
+        return i_img, o_img
 
 
-def get_data(data_path, device,
+def get_data(data_path,
              batch_size=1,
              target='m', factor=0.7,
              crop_size=256, flip='hv',
@@ -139,8 +197,7 @@ def get_data(data_path, device,
         factor=factor,
         crop_size=crop_size,
         flip=flip,
-        norm_mode=norm_mode,
-        device=device
+        norm_mode=norm_mode
     )
 
     test_data = S7Dataset(
@@ -150,8 +207,7 @@ def get_data(data_path, device,
         factor=factor,
         crop_size=crop_size,
         flip=flip,
-        norm_mode=norm_mode,
-        device=device
+        norm_mode=norm_mode
     )
 
     train_loader = DataLoader(
