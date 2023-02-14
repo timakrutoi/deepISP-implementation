@@ -23,7 +23,6 @@ def random_crop(initial, target, crop_size):
     # this *if* checks if jpg version of image is rotated
     # on 90 degrees (raw data in never rotated)
     if (initial.shape[:2]) != (target.shape[:2]):
-        # print('Bad shape detected (', idx, ')', i_img.shape, o_img.shape)
         target = target.rot90(k=1, dims=[0, 1])
 
     initial = initial[slice_x, slice_y, :]
